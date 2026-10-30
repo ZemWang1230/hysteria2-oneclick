@@ -109,33 +109,34 @@ write('check-client.json', json.dumps(client, indent=2)+'\n')
 PY
 }
 augment() {
-  python3 - "$1" "$2" <<'PYAUG'
+  python3 - "$1" "$2" "$3" "$4" "$5" <<'PYAUG'
 import base64, json, pathlib, secrets, subprocess, sys, uuid
 from urllib.parse import urlencode
 p = pathlib.Path(sys.argv[1]).resolve()
 ip = sys.argv[2]
+ssport, hyport, tuport = map(int, sys.argv[3:6])
 conf = json.loads((p / 'server.json').read_text())
 uid = str(uuid.uuid4())
 sspw, hypw, tupw = (secrets.token_hex(24) for _ in range(3))
 tls = {'enabled': True, 'certificate_path': str(p/'server.crt'), 'key_path': str(p/'server.key')}
 conf['inbounds'].extend([
- {'type':'shadowsocks','tag':'ss-in','listen':'0.0.0.0','listen_port':8388,'network':'tcp','method':'chacha20-ietf-poly1305','password':sspw},
- {'type':'hysteria2','tag':'hy2-in','listen':'0.0.0.0','listen_port':8443,'users':[{'password':hypw}],'tls':dict(tls)},
- {'type':'tuic','tag':'tuic-in','listen':'0.0.0.0','listen_port':8444,'users':[{'uuid':uid,'password':tupw}],'congestion_control':'cubic','tls':dict(tls, alpn=['h3'])},
+ {'type':'shadowsocks','tag':'ss-in','listen':'0.0.0.0','listen_port':ssport,'network':'tcp','method':'chacha20-ietf-poly1305','password':sspw},
+ {'type':'hysteria2','tag':'hy2-in','listen':'0.0.0.0','listen_port':hyport,'users':[{'password':hypw}],'tls':dict(tls)},
+ {'type':'tuic','tag':'tuic-in','listen':'0.0.0.0','listen_port':tuport,'users':[{'uuid':uid,'password':tupw}],'congestion_control':'cubic','tls':dict(tls, alpn=['h3'])},
 ])
 (p/'server.json').write_text(json.dumps(conf, indent=2)+'\n')
 fingerprint = subprocess.check_output(['openssl','x509','-in',str(p/'server.crt'),'-noout','-fingerprint','-sha256'],universal_newlines=True).strip().split('=',1)[1].replace(':','').lower()
 extra = f'''  - name: SS
     type: ss
     server: {ip}
-    port: 8388
+    port: {ssport}
     cipher: chacha20-ietf-poly1305
     password: "{sspw}"
     udp: false
   - name: HY2
     type: hysteria2
     server: {ip}
-    port: 8443
+    port: {hyport}
     password: "{hypw}"
     sni: {ip}
     fingerprint: "{fingerprint}"
@@ -143,7 +144,7 @@ extra = f'''  - name: SS
   - name: TUIC
     type: tuic
     server: {ip}
-    port: 8444
+    port: {tuport}
     uuid: {uid}
     password: "{tupw}"
     congestion-controller: cubic
@@ -156,15 +157,24 @@ clash = (p/'clash-verge.yaml').read_text().replace('proxy-groups:\n', extra+'pro
 (p/'clash-verge.yaml').write_text(clash)
 ss = base64.urlsafe_b64encode(('chacha20-ietf-poly1305:'+sspw).encode()).decode().rstrip('=')
 uri = (p/'vless-uri.txt').read_text().strip()
-lines = [uri, 'ss://'+ss+'@'+ip+':8388#SS',
-         'hysteria2://'+hypw+'@'+ip+':8443/?'+urlencode({'sni':ip,'insecure':'0'})+'#HY2',
-         'tuic://'+uid+':'+tupw+'@'+ip+':8444?'+urlencode({'congestion_control':'cubic','udp_relay_mode':'native','alpn':'h3','sni':ip,'allow_insecure':'0'})+'#TUIC']
+lines = [uri, 'ss://'+ss+'@'+ip+':'+str(ssport)+'#SS',
+         'hysteria2://'+hypw+'@'+ip+':'+str(hyport)+'/?'+urlencode({'sni':ip,'insecure':'0'})+'#HY2',
+         'tuic://'+uid+':'+tupw+'@'+ip+':'+str(tuport)+'?'+urlencode({'congestion_control':'cubic','udp_relay_mode':'native','alpn':'h3','sni':ip,'allow_insecure':'0'})+'#TUIC']
 (p/'shadowrocket-nodes.txt').write_text('\n'.join(lines)+'\n')
 for f in p.iterdir(): f.chmod(0o600)
 PYAUG
 }
 
 show() {
+  python3 - "$BASE/config.json" <<'PYSHOW'
+import json, sys
+config = json.load(open(sys.argv[1]))
+labels = {'vless':'REALITY/TCP', 'shadowsocks':'SS/TCP', 'hysteria2':'HY2/UDP', 'tuic':'TUIC/UDP'}
+print('\n端口清单：')
+for inbound in config['inbounds']:
+    if inbound['type'] in labels:
+        print('  {}: {}'.format(labels[inbound['type']], inbound['listen_port']))
+PYSHOW
   local file
   for file in clash-verge.yaml shadowrocket.conf vless-uri.txt shadowrocket-nodes.txt root-ca.crt; do
     printf '\n========== %s 开始 ==========\n' "$file"
@@ -183,7 +193,7 @@ if [[ ${1:-} == --test-render ]]; then
 fi
 [[ $EUID == 0 ]] || fail '请使用 sudo bash。'
 if [[ ${1:-} == --show ]]; then show; exit; fi
-[[ $# -ge 1 && $# -le 3 ]] || fail '用法：sudo bash install-multi.sh 公网IPv4 [TCP端口=443] [握手目标=www.microsoft.com]'
+[[ $# -ge 1 && $# -le 3 ]] || fail '用法：sudo bash install-multi.sh 公网IPv4 [REALITY TCP端口] [握手目标=www.microsoft.com]；不指定端口时随机选择'
 # Check the platform, not an Ubuntu release number.
 [[ -r /etc/os-release ]] || fail '无法识别系统：缺少 /etc/os-release。'
 . /etc/os-release
@@ -198,16 +208,41 @@ apt-get update || fail '更新 Ubuntu 软件源失败，请检查网络和 apt �
 apt-get install -y --no-install-recommends python3 iproute2 curl ca-certificates openssl tar passwd coreutils ||
   fail '安装依赖失败，请检查 apt 输出。'
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 6))' || fail '需要 Python 3.6 或更新版本。'
-validate "$1" "${2:-443}" "${3:-www.microsoft.com}"
+validate "$1" "${2:-20000}" "${3:-www.microsoft.com}"
 ADDRESS=$1
-PORT=$((10#${2:-443}))
 TARGET=${3:-www.microsoft.com}
-[[ -z $(ss -H -ltn "sport = :$PORT") ]] || fail "TCP $PORT 已被占用。可在 IP 后指定 24443。"
+command -v ss >/dev/null || fail '未找到 ss，请检查 iproute2 是否正确安装。'
+# Select distinct currently unused ports in 20000-29999 on BOTH transports.
+# OS can still allocate a port between inspection and service start.
+read -r PORT SS_PORT HY_PORT TU_PORT < <(python3 - "${2:-}" <<'PYPORTS'
+import secrets, subprocess, sys
+explicit = int(sys.argv[1]) if sys.argv[1] else None
+used = {18080}
+ports = []
+def free(port):
+    for mode in ('-ltn', '-lun'):
+        result = subprocess.run(['ss', '-H', mode, 'sport = :{}'.format(port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode:
+            sys.exit('无法检查端口，请检查 ss 是否正常工作。')
+        if result.stdout.strip(): return False
+    return True
+if explicit is not None:
+    if explicit in used or not free(explicit):
+        sys.exit('指定的 REALITY 端口已被使用或与本地自检冲突。')
+    ports.append(explicit)
+    used.add(explicit)
+for _ in range(1024):
+    if len(ports) == 4: break
+    port = 20000 + secrets.randbelow(10000)
+    if port not in used and free(port):
+        ports.append(port)
+        used.add(port)
+if len(ports) != 4: sys.exit('找不到四个可用端口。')
+print(*ports)
+PYPORTS
+) || fail '随机端口选择失败。'
 [[ -z $(ss -H -ltn 'sport = :18080') ]] || fail '本地测试端口 TCP 18080 已被占用，请释放后再安装。'
-[[ $PORT != 18080 ]] || fail 'REALITY 端口不能与本地测试端口 TCP 18080 相同。'
-[[ $PORT != 8388 ]] || fail 'REALITY 端口不能与 Shadowsocks 的 TCP 8388 相同。'
-[[ -z $(ss -H -ltn 'sport = :8388') ]] || fail 'TCP 8388 已被占用。'
-for p in 8443 8444; do [[ -z $(ss -H -lun "sport = :$p") ]] || fail "UDP $p 已被占用。"; done
+printf '分配端口：REALITY %s/TCP，SS %s/TCP，HY2 %s/UDP，TUIC %s/UDP\n' "$PORT" "$SS_PORT" "$HY_PORT" "$TU_PORT"
 trap 'echo "部署中断（行 $LINENO）；sudo journalctl -u sing-multi -n 60 --no-pager" >&2' ERR
 # Official release only; pinned to the version validated by this repository.
 umask 077
@@ -236,7 +271,7 @@ openssl req -newkey rsa:2048 -nodes -subj "/CN=$ADDRESS" -keyout "$work/output/s
 printf 'subjectAltName=IP:%s\nbasicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\n' "$ADDRESS" > "$work/extensions"
 openssl x509 -req -in "$work/server.csr" -CA "$work/output/root-ca.crt" -CAkey "$work/ca.key" -CAcreateserial \
  -out "$work/output/server.crt" -days 825 -sha256 -extfile "$work/extensions" >/dev/null 2>&1
-augment "$work/output" "$ADDRESS"
+augment "$work/output" "$ADDRESS" "$SS_PORT" "$HY_PORT" "$TU_PORT"
 "$BINARY" check -c "$work/output/server.json"
 "$BINARY" check -c "$work/output/check-client.json"
 if ! id sing-multi >/dev/null 2>&1; then
@@ -285,7 +320,7 @@ UMask=0077
 WantedBy=multi-user.target
 UNIT
 chmod 0644 /etc/systemd/system/sing-multi.service
-if command -v ufw >/dev/null && LC_ALL=C ufw status | grep -q '^Status: active'; then ufw allow "$PORT/tcp"; ufw allow 8388/tcp; ufw allow 8443/udp; ufw allow 8444/udp; fi
+if command -v ufw >/dev/null && LC_ALL=C ufw status | grep -q '^Status: active'; then ufw allow "$PORT/tcp"; ufw allow "$SS_PORT/tcp"; ufw allow "$HY_PORT/udp"; ufw allow "$TU_PORT/udp"; fi
 systemctl daemon-reload
 systemctl enable --now sing-multi.service
 sleep 2
@@ -302,7 +337,8 @@ else
  echo '警告：服务已启动，但本机端到端测试失败，请检查 sing-multi 日志。' >&2
 fi
 show
-echo "请在厂商防火墙放行 TCP $PORT、TCP 8388、UDP 8443 和 UDP 8444，并在 Mac/iPhone 导入新配置。"
+echo "需放行端口：REALITY $PORT/TCP，SS $SS_PORT/TCP，HY2 $HY_PORT/UDP，TUIC $TU_PORT/UDP。"
+echo '若 UFW 未启用，脚本不会启用它；如有其他主机防火墙，请自行放行。厂商防火墙也须放行。' 
 echo '本机测试不能证明你的公网线路可达。旧服务未停止；如监听端口冲突，请换端口或在新服务器安装。'
 echo '小火箭先导入 shadowrocket-nodes.txt 中的节点和分流配置；HY2/TUIC 还需信任导出的 CA。'
 echo 'CA 私钥仅用于签发，安装结束清理临时文件；仅将 root-ca.crt 通过可信渠道导入 iPhone 并启用完全信任。' 
