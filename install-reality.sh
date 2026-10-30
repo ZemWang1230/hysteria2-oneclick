@@ -49,7 +49,7 @@ write('server.json', json.dumps(server, indent=2)+'\n')
 write('clash-verge.yaml', f'''mixed-port: 7890
 allow-lan: false
 mode: rule
-log-level: warn
+log-level: warning
 ipv6: false
 proxies:
   - name: REALITY
