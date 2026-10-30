@@ -6,11 +6,11 @@ set -Eeuo pipefail
 fail() { echo "错误：$*" >&2; exit 1; }
 validate() {
   python3 - "$1" "$2" <<'PY'
-import ipaddress, sys
+import ipaddress, re, sys
 try:
     ip = ipaddress.IPv4Address(sys.argv[1])
     assert ip.is_global
-    assert sys.argv[2].isascii() and sys.argv[2].isdecimal()
+    assert re.fullmatch(r'[0-9]+', sys.argv[2])
     assert 1 <= int(sys.argv[2]) <= 65535
 except (ValueError, AssertionError):
     sys.exit('请输入有效公网 IPv4 和 1–65535 的 UDP 端口。')
@@ -113,23 +113,29 @@ fi
 [[ $EUID == 0 ]] || fail '请用 sudo bash 执行。'
 if [[ ${1:-} == --show ]]; then show_clients; exit; fi
 [[ $# -ge 1 && $# -le 2 ]] || fail '用法：sudo bash install.sh 公网IPv4 [UDP端口]'
-[[ -r /etc/os-release ]] || fail '无法识别系统。'
+# Check the platform, not an Ubuntu release number.
+[[ -r /etc/os-release ]] || fail '无法识别系统：缺少 /etc/os-release。'
 . /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || fail '本脚本仅支持 Ubuntu 24.04。'
-command -v python3 >/dev/null || fail '请先运行 sudo apt-get update && sudo apt-get install -y python3'
+[[ ${ID:-} == ubuntu ]] || fail '本脚本需要 Ubuntu 服务器。'
+command -v apt-get >/dev/null || fail '缺少 apt-get，无法安装依赖。'
+command -v systemctl >/dev/null && systemctl show-environment >/dev/null 2>&1 ||
+  fail '需要正在运行的 systemd；不支持未启用 systemd 的容器或 WSL。'
+case $(uname -m) in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; *) fail '仅支持 64 位 amd64/arm64。';; esac
+[[ ! -e /etc/hysteria/config.yaml && ! -e /root/hy2-client ]] ||
+  fail '已有配置或客户端文件，停止以免覆盖。查看现有输出：sudo bash install.sh --show'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update || fail '更新 Ubuntu 软件源失败，请检查网络和 apt 源（旧版本可能已停止维护）。'
+apt-get install -y --no-install-recommends python3 iproute2 curl ca-certificates openssl tar passwd coreutils ||
+  fail '安装依赖失败，请检查 apt 输出。'
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 6))' || fail '需要 Python 3.6 或更新版本。'
 validate "$1" "${2:-443}"
 SERVER_IP=$1
 PORT=$((10#${2:-443}))
 
-[[ ! -e /etc/hysteria/config.yaml && ! -e /root/hy2-client ]] ||
-  fail '已有配置或客户端文件，停止以免覆盖。查看现有输出：sudo bash install.sh --show'
-command -v ss >/dev/null || fail '缺少 ss，请安装 iproute2。'
 [[ -z $(ss -H -lun "sport = :$PORT") ]] || fail "UDP $PORT 已被占用。"
 
 trap 'echo "部署中断，行号：$LINENO。日志：sudo journalctl -u hysteria-server -n 60 --no-pager" >&2' ERR
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends curl ca-certificates openssl iproute2
+openssl req -help 2>&1 | grep -q -- '-addext' || fail '系统 OpenSSL 不支持 -addext，请升级 OpenSSL 或 Ubuntu。'
 umask 022
 installer=$(mktemp)
 trap 'rm -f "$installer"' EXIT
