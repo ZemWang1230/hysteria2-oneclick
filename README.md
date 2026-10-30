@@ -20,12 +20,12 @@ HY2 和 TUIC 使用本机生成的专用 CA 签发证书；Mac 配置固定服�
 
 证书及配置保存在 `/etc/sing-multi` 和 `/root/multi-client`，重启不会重新生成；可 `sudo bash /tmp/install-multi.sh --show` 重新打印输出。叶子证书有效 825 天，当前不支持自动续期，届时需重新部署并更新客户端配置和证书。请勿删除现有文件后直接重试，否则凭据可能改变。
 
-**验证限制：** 服务端配置、证书链、客户端 YAML 与导出格式已离线校验。此环境无法启动 sing-box 网络服务，未完成真实握手、Ubuntu systemd 安装或 Clash Verge / Shadowrocket 真机测试；特别是 Shadowrocket 的 TUIC/HY2 链接字段和系统 CA 信任仍需在真实版本上验证。脚本仅对 REALITY 进行本机代理自检，PASS 不代表四种协议均可用。你的网络此前出现 UDP 不通，HY2 和 TUIC 可能仍然失败。
+**验证限制：** 服务端配置、证书链、客户端导出格式已离线校验，四节点 YAML 已使用 Mihomo 1.19.33 的配置检查通过。此环境无法启动 sing-box 网络服务，未完成真实握手、Ubuntu systemd 安装或 Clash Verge / Shadowrocket 真机测试；特别是 Shadowrocket 的 TUIC/HY2 链接字段和系统 CA 信任仍需在真实版本上验证。脚本仅对 REALITY 进行本机代理自检，PASS 不代表四种协议均可用。你的网络此前出现 UDP 不通，HY2 和 TUIC 可能仍然失败。
 
 ```bash
 sudo systemctl status sing-multi --no-pager -l
 sudo journalctl -u sing-multi -n 60 --no-pager
-python3 tests/test-multi.py /path/to/sing-box  # 测试环境需要 PyYAML 和 OpenSSL
+python3 tests/test-multi.py /path/to/sing-box /path/to/mihomo  # mihomo 参数可省略；需 PyYAML 和 OpenSSL
 ```
 
 ## 原有 REALITY 单协议安装
