@@ -1,59 +1,82 @@
-# Hysteria 2 一键部署
+# Ubuntu 24.04 单用户代理一键部署
 
-面向 Ubuntu 24.04、64 位、公网 IPv4 的单用户部署。使用官方安装器 + systemd；自动生成密码和自签证书，终端打印 Clash Verge YAML、Shadowrocket CONF 和节点链接。
+默认使用 **sing-box + VLESS + REALITY + Vision，TCP 443**。适合只有公网 IPv4、不想购买域名、UDP 连接不稳定的场景。支持 amd64 / arm64；直接使用 systemd，不安装管理面板。固定使用已校验的 sing-box **1.14.4**。
 
-## 使用
+旧 Hysteria 2 的 `install.sh` 保留，文档见 [HYSTERIA2.md](HYSTERIA2.md)。新脚本不会停止或修改旧 HY2；TCP 443 和 UDP 443 可以同时使用。
 
-先在云安全组放行所选 **UDP 端口**（默认 443）。系统 UFW 已启用时脚本自动添加对应规则；不会开启、关闭或重置 UFW。其他防火墙需自行配置。不需要域名或 TCP 80。
+## 一条命令安装
 
-公开仓库：`ZemWang1230/hysteria2-oneclick`。服务器无需登录 GitHub，替换公网 IPv4 后执行：
-
-```bash
-curl -fSL https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh -o /tmp/hy2-install.sh && sudo bash /tmp/hy2-install.sh 你的公网IPv4
-```
-
-可在最后增加端口，例如 `你的公网IPv4 8443`。默认安装当时官方最新版本；首次运行需要访问 Ubuntu 软件源、官方安装站及安装器所需下载源。最小镜像若无 Python 3 / ss，先安装 `python3 iproute2`。运行前可以检查下载的脚本。无需向任何在线订阅转换网站发送密码。
-
-## 导入
-
-- Mac：复制输出分隔线之间的 YAML，保存为 `clash-verge.yaml`，导入使用 Mihomo 内核的 Clash Verge，选用该配置并开启系统代理。系统代理只覆盖遵循系统代理的应用；需要其他流量时自行配置客户端 TUN。
-- iPhone：将 CONF 保存为 `shadowrocket.conf`，通过文件分享导入 Shadowrocket，启用配置，路由选择“配置”。如版本未识别配置内节点，可使用输出的 `hysteria2://` 链接添加。
-- 默认局域网 IPv4 直连，其余代理；无中国大陆分流表、广告过滤、订阅服务或额外面板。未承诺 DNS 防泄漏、所有应用全设备隧道或特定吞吐。
-
-## 证书与凭据
-
-Clash 配置固定 SHA-256 证书指纹。Shadowrocket 兼容配置和备用链接使用 `allowInsecure=1` / `insecure=1`，**跳过服务器身份验证，存在中间人风险**；不能宣称它与指纹固定同等安全。需要完整身份校验时，应改为该客户端验证支持的证书固定或可信证书方案，不应仅忽略证书错误。
-
-`hy2.internal` 只是自签证书名称，无需注册或解析。证书有效期 10 年，无自动续期；更换证书后需重新导出指纹配置。
-
-密码、私钥、配置仅生成于部署服务器；不会上传 GitHub。客户端配置位于 root 私有目录 `/root/hy2-client`。服务账户可读服务端配置和私钥，其他普通用户不能读取。不要分享含密码的输出、截图或日志。
-
-## 管理
+先在 VPS 厂商防火墙 / 安全组放行 **TCP 443**，将下面的 `你的公网IPv4` 替换为服务器 IP：
 
 ```bash
-sudo bash /tmp/hy2-install.sh --show
-sudo systemctl status hysteria-server --no-pager
-sudo journalctl -u hysteria-server -n 60 --no-pager
-sudo systemctl restart hysteria-server
-sudo systemctl stop hysteria-server
+curl -fSL https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install-reality.sh -o /tmp/install-reality.sh && sudo bash /tmp/install-reality.sh 你的公网IPv4
 ```
 
-重复安装会在发现已有配置/输出目录时停止，不覆盖密码或证书。失败后检查日志与现有文件，不要为了重试而直接删除有效配置。`--show` 可重新打印已生成的客户端配置。
+公开仓库，无需登录 GitHub。可先阅读下载的脚本再执行。系统须有 `python3` 和 `ss`（最小镜像先安装 `python3 iproute2`）；下载命令需要 `curl`。脚本安装其余依赖，从 SagerNet 官方 GitHub Release 下载固定版本二进制。需要能访问 Ubuntu 软件源、GitHub 和握手目标。
+
+可选参数：`公网IPv4 TCP端口 握手目标域名`，例如：
+
+```bash
+sudo bash /tmp/install-reality.sh 你的公网IPv4 24443 www.microsoft.com
+```
+
+默认握手目标是 `www.microsoft.com`，不是你需要拥有的域名。脚本在 VPS 上检查其 TLS 1.3 连通性和证书；目标不通时会停止。更换目标应选择 VPS 可直连、支持 TLS 1.3 的真实网站。目标可达不代表客户端公网链路一定可达。
+
+安装会生成独立 UUID 和 REALITY 密钥，校验配置、启动服务，然后通过本机 REALITY 客户端请求 HTTPS 页面。输出 `PASS` 表示本机握手、认证和代理转发通过；若测试失败会打印警告。最终仍需用 Mac/iPhone 测试公网连接。
+
+## 复制输出到客户端
+
+脚本会打印带“开始 / 结束”分隔线的三段内容。只复制分隔线之间的正文，不要复制分隔线。
+
+- **Mac / Clash Verge（Mihomo 内核）**：保存 YAML 为 `clash-verge.yaml`，导入并启用该配置，选择 `REALITY`，开启系统代理。系统代理仅覆盖遵循系统代理的应用；需要全设备接管时使用客户端 TUN 并另行验证 DNS、IPv6 和应用流量。
+- **iPhone / Shadowrocket**：先复制整条 `vless://…` 链接并导入节点；再将 CONF 保存为 `shadowrocket.conf`，通过文件分享导入并启用；首页选择 `REALITY` 节点，路由选“配置”。**CONF 只包含分流规则，不能单独建立连接，节点链接必须导入。** 采用两步方式避免依赖不同版本的配置内节点语法。
+
+客户端应使用支持 VLESS REALITY / Vision 的版本。全部凭据一致生成，不需要在线订阅转换。
+
+默认服务器 IP、回环和局域网 IPv4 直连，其余经代理。未包含中国大陆分流、广告屏蔽或订阅服务。不是游戏加速方案；TCP 丢包时仍会影响速度，实际吞吐取决于 VPS 线路、带宽和负载。
+
+## 隐私与权限
+
+REALITY 使用服务端公钥验证，不需要自签证书，也不启用跳过证书验证。私钥只保存在服务器端；客户端配置和链接包含访问凭据，不能提交到 GitHub 或分享截图。
+
+服务使用独立低权限账户，配置目录限制访问。服务端配置为 `/etc/sing-reality/config.json`，客户端文件保存在 root 私有目录 `/root/reality-client/`。日志级别为 `warn`，不启用普通访问日志；错误日志仍可能包含连接信息。
+
+自建代理不等于匿名：VPS 厂商和目标网站仍能看到各自连接信息。当前配置不承诺 DNS 防泄漏；小火箭默认使用系统 DNS，Mac 的 DNS 行为取决于客户端接管方式。仍应使用 HTTPS。公开仓库仅存通用脚本，不存实际部署的 UUID、密钥或客户端配置。
+
+## 管理与排查
+
+```bash
+# 重新打印三段客户端内容（需保留或重新下载脚本）
+sudo bash /tmp/install-reality.sh --show
+sudo systemctl status sing-reality --no-pager -l
+sudo journalctl -u sing-reality -n 60 --no-pager
+sudo ss -ltnp 'sport = :443'
+sudo systemctl restart sing-reality
+```
+
+UFW 已启用时脚本添加所选 TCP 端口规则；不会启用、停用或重置 UFW。厂商防火墙及其他 nftables/iptables 规则需要自行检查。
+
+重复安装发现已有目录或服务文件时会停止，避免覆盖凭据。中途失败时先查看日志和现有文件，不要直接删除配置重试。安装不会自动回滚已经写入的文件。
+
+确认新节点在两端正常后，可以停止旧 HY2：
+
+```bash
+sudo systemctl disable --now hysteria-server
+```
 
 ## 验证范围
 
 ```bash
-bash -n install.sh
-bash install.sh --self-test
+bash -n install-reality.sh
+# 测试机需 PyYAML；不会安装服务或修改防火墙
+python3 tests/test-reality.py /path/to/sing-box
 ```
 
-离线检查涵盖 IP/端口边界、输出格式关键字段及凭据文件权限。安装期间检查服务 active 和 UDP 监听。尚未在用户服务器及真实 Mac/iPhone 上完成端到端实测；需在设备导入后检查连接和出口 IP。
+已用官方 sing-box 1.14.4 检查服务端 / 自检客户端配置，并验证 YAML 解析、跨客户端凭据一致、输出不含服务端私钥、文件权限及非法输入拒绝。测试环境限制网络套接字创建，未完成真实握手与 Mac/iPhone 实测；安装器会在 VPS 上执行本机端到端测试。此脚本不是上游官方安装器。
 
-## 参考
+## 官方参考
 
-- https://v2.hysteria.network/docs/getting-started/Server-Installation-Script/
-- https://v2.hysteria.network/docs/getting-started/Server/
-- https://wiki.metacubex.one/config/proxies/hysteria2/
-- https://github.com/jinofhust/shadowrocket
-
-此仓库脚本为独立部署包装，非 Hysteria 或客户端官方项目。
+- [sing-box VLESS](https://sing-box.sagernet.org/configuration/inbound/vless/)
+- [sing-box TLS / REALITY](https://sing-box.sagernet.org/configuration/shared/tls/)
+- [sing-box 官方版本](https://github.com/SagerNet/sing-box/releases)
+- [Mihomo VLESS](https://wiki.metacubex.one/config/proxies/vless/)
