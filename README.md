@@ -12,7 +12,7 @@
 curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install-multi.sh' -o /tmp/install-multi.sh && sudo bash /tmp/install-multi.sh 你的公网IPv4
 ```
 
-默认占用 TCP 443（REALITY）、TCP 8388（SS）、UDP 8443（HY2）和 UDP 8444（TUIC）。请在云厂商防火墙放行；脚本会先检查端口，不停止已有服务。REALITY 端口可通过第二个参数调整，例如 `公网IPv4 24443`。不适用于直接覆盖已有安装；请在新服务器使用。系统 UFW 启用时会添加规则。
+安装时随机选取四个不同的 20000–29999 端口：REALITY、SS 使用 TCP，HY2、TUIC 使用 UDP。脚本会检查 TCP 和 UDP 是否已有监听，并在安装输出中列出端口。不适用于直接覆盖已有安装；请在新服务器使用。REALITY 端口可通过第二个参数手动指定，其他端口仍随机。系统 UFW 已启用时自动放行；如果未启用，脚本不会擅自启用以免影响 SSH，其他主机防火墙需自行检查。云厂商防火墙需按输出的端口与协议单独放行。
 
 输出 `clash-verge.yaml` 包含四个可选节点。`shadowrocket-nodes.txt` 包含四条节点链接，逐条导入；另将 `shadowrocket.conf` 保存并导入分流配置，首页选择要用的节点。输出包含密码、UUID，切勿公开分享或上传仓库。
 
