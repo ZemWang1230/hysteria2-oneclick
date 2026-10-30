@@ -29,7 +29,7 @@ binary, address, port, host, dest = sys.argv[1:]
 port = int(port)
 p = pathlib.Path(dest)
 p.mkdir(mode=0o700, parents=True, exist_ok=True)
-keys = dict(line.split(':', 1) for line in subprocess.check_output([binary, 'generate', 'reality-keypair'], text=True).splitlines() if ':' in line)
+keys = dict(line.split(':', 1) for line in subprocess.check_output([binary, 'generate', 'reality-keypair'], universal_newlines=True).splitlines() if ':' in line)
 private, public = keys['PrivateKey'].strip(), keys['PublicKey'].strip()
 uid, sid = str(uuid.uuid4()), secrets.token_hex(8)
 def write(name, text):
@@ -128,23 +128,28 @@ fi
 [[ $EUID == 0 ]] || fail '请使用 sudo bash。'
 if [[ ${1:-} == --show ]]; then show; exit; fi
 [[ $# -ge 1 && $# -le 3 ]] || fail '用法：sudo bash install-reality.sh 公网IPv4 [TCP端口=443] [握手目标=www.microsoft.com]'
+# Check the platform, not an Ubuntu release number.
+[[ -r /etc/os-release ]] || fail '无法识别系统：缺少 /etc/os-release。'
 . /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || fail '仅支持 Ubuntu 24.04。'
-command -v python3 >/dev/null || fail '请先安装 python3。'
+[[ ${ID:-} == ubuntu ]] || fail '本脚本需要 Ubuntu 服务器。'
+command -v apt-get >/dev/null || fail '缺少 apt-get，无法安装依赖。'
+command -v systemctl >/dev/null && systemctl show-environment >/dev/null 2>&1 ||
+  fail '需要正在运行的 systemd；不支持未启用 systemd 的容器或 WSL。'
+case $(uname -m) in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; *) fail '仅支持 64 位 amd64/arm64。';; esac
+[[ ! -e $BASE && ! -e $CLIENTS && ! -e /etc/systemd/system/sing-reality.service ]] || fail '已有 REALITY 部署，停止以免覆盖。使用 --show 查看原配置。'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update || fail '更新 Ubuntu 软件源失败，请检查网络和 apt 源（旧版本可能已停止维护）。'
+apt-get install -y --no-install-recommends python3 iproute2 curl ca-certificates openssl tar passwd coreutils ||
+  fail '安装依赖失败，请检查 apt 输出。'
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 6))' || fail '需要 Python 3.6 或更新版本。'
 validate "$1" "${2:-443}" "${3:-www.microsoft.com}"
 ADDRESS=$1
 PORT=$((10#${2:-443}))
 TARGET=${3:-www.microsoft.com}
-[[ ! -e $BASE && ! -e $CLIENTS && ! -e /etc/systemd/system/sing-reality.service ]] || fail '已有 REALITY 部署，停止以免覆盖。使用 --show 查看原配置。'
-command -v ss >/dev/null || fail '请先安装 iproute2。'
 [[ -z $(ss -H -ltn "sport = :$PORT") ]] || fail "TCP $PORT 已被占用。可在 IP 后指定 24443。"
 [[ -z $(ss -H -ltn 'sport = :18080') ]] || fail '本地测试端口 TCP 18080 已被占用，请释放后再安装。'
 trap 'echo "部署中断（行 $LINENO）；sudo journalctl -u sing-reality -n 60 --no-pager" >&2' ERR
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends curl ca-certificates openssl tar
 # Official release only; pinned to the version validated by this repository.
-case $(uname -m) in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; *) fail '仅支持 amd64/arm64。';; esac
 umask 077
 work=$(mktemp -d)
 client_pid=''
@@ -154,7 +159,8 @@ curl -fSL --retry 3 --connect-timeout 15 --max-time 180 \
  "https://github.com/SagerNet/sing-box/releases/download/v$VERSION/sing-box-$VERSION-linux-$ARCH.tar.gz" -o "$work/sing-box.tar.gz"
 tar --no-same-owner -xzf "$work/sing-box.tar.gz" -C "$work"
 BINARY="$work/sing-box-$VERSION-linux-$ARCH/sing-box"
-"$BINARY" version
+"$BINARY" version || fail 'sing-box 二进制无法运行，请检查系统运行库与 CPU/内核兼容性。'
+openssl s_client -help 2>&1 | grep -q -- '-tls1_3' || fail '系统 OpenSSL 不支持 TLS 1.3，请升级 OpenSSL 或 Ubuntu。'
 # Verify the selected target is reachable with TLS 1.3 before writing deployment files.
 timeout 20 openssl s_client -connect "$TARGET:443" -servername "$TARGET" \
  -tls1_3 -verify_return_error -verify_hostname "$TARGET" -brief </dev/null >"$work/target.log" 2>&1 || {
