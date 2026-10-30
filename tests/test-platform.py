@@ -4,6 +4,7 @@ No root, package installation or system changes. This is not a VPS install test.
 """
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 
@@ -15,6 +16,12 @@ with tempfile.TemporaryDirectory() as tmp:
         guard = source.split('# Check the platform, not an Ubuntu release number.\n', 1)[1]
         guard = guard.split('[[ ! -e ', 1)[0]
         guard = guard.replace('/etc/os-release', str(release))
+        version_setup = ''
+        url_check = ''
+        if name == 'install-reality.sh':
+            version_setup = re.search(r'^\w*VERSION=1\.14\.4$', source, re.M).group() + '\n'
+            url = re.search(r'https://github\.com/SagerNet/sing-box/[^"\n]+', source).group()
+            url_check = '\nprintf "%s" "' + url + '"\n'
         for distro, version, arch, systemd, apt, success in (
             ('ubuntu', '20.04', 'x86_64', 0, 0, True),
             ('ubuntu', '22.04', 'x86_64', 0, 0, True),
@@ -26,7 +33,7 @@ with tempfile.TemporaryDirectory() as tmp:
             ('ubuntu', '22.04', 'x86_64', 1, 0, False),
             ('ubuntu', '22.04', 'x86_64', 0, 1, False),
         ):
-            release.write_text('ID="{}"\nVERSION_ID="{}"\n'.format(distro, version))
+            release.write_text('ID="{}"\nVERSION_ID="{}"\nVERSION="{} LTS (Jammy Jellyfish)"\n'.format(distro, version, version))
             mocks = '''set -Eeuo pipefail
 fail() { echo "$*" >&2; exit 1; }
 command() { if [[ $2 == apt-get ]]; then return "$APT_STATUS"; else builtin command "$@"; fi; }
@@ -34,9 +41,13 @@ systemctl() { return "$SYSTEMD_STATUS"; }
 uname() { echo "$TEST_ARCH"; }
 '''
             env = dict(os.environ, APT_STATUS=str(apt), SYSTEMD_STATUS=str(systemd), TEST_ARCH=arch)
-            result = subprocess.run(['bash', '-c', mocks + guard], env=env, capture_output=True, text=True)
+            result = subprocess.run(['bash', '-c', mocks + version_setup + guard + url_check], env=env, capture_output=True, text=True)
             assert (result.returncode == 0) == success, (name, distro, version, arch, result.stderr)
+            if success and url_check:
+                binary_arch = 'amd64' if arch == 'x86_64' else 'arm64'
+                assert result.stdout == ('https://github.com/SagerNet/sing-box/releases/download/'
+                                         'v1.14.4/sing-box-1.14.4-linux-' + binary_arch + '.tar.gz'), result.stdout
         release.unlink()
-        result = subprocess.run(['bash', '-c', mocks + guard], env=env, capture_output=True, text=True)
+        result = subprocess.run(['bash', '-c', mocks + version_setup + guard + url_check], env=env, capture_output=True, text=True)
         assert result.returncode != 0 and '无法识别系统' in result.stderr
 print('PASS: both installers accept Ubuntu versions and reject non-Ubuntu, missing metadata, unsupported CPU, unavailable apt and inactive systemd')
