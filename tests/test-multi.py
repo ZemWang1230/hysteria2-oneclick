@@ -29,6 +29,11 @@ with tempfile.TemporaryDirectory() as tmp:
     yaml_config = yaml.safe_load((out/'clash-verge.yaml').read_text())
     assert {x['type'] for x in config['inbounds']} == {'vless','shadowsocks','hysteria2','tuic'}
     assert [x['name'] for x in yaml_config['proxies']] == ['REALITY','SS','HY2','TUIC']
+    tuic = next(x for x in config['inbounds'] if x['type'] == 'tuic')
+    assert tuic['tls']['alpn'] == ['h3'] == yaml_config['proxies'][3]['alpn']
+    assert yaml_config['log-level'] == 'warning'
+    if len(sys.argv) > 2:
+        run(str(pathlib.Path(sys.argv[2]).resolve()), '-t', '-f', str(out/'clash-verge.yaml'), '-d', str(p))
     assert yaml_config['proxy-groups'][0]['proxies'] == ['REALITY','SS','HY2','TUIC']
     assert all(not x.get('skip-cert-verify') for x in yaml_config['proxies'])
     nodes = (out/'shadowrocket-nodes.txt').read_text().splitlines()
