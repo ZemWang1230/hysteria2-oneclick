@@ -1,8 +1,14 @@
-# Ubuntu 24.04 单用户代理一键部署
+# Ubuntu 单用户代理一键部署
 
 默认使用 **sing-box + VLESS + REALITY + Vision，TCP 443**。适合只有公网 IPv4、不想购买域名、UDP 连接不稳定的场景。支持 amd64 / arm64；直接使用 systemd，不安装管理面板。固定使用已校验的 sing-box **1.14.4**。
 
 旧 Hysteria 2 的 `install.sh` 保留，文档见 [HYSTERIA2.md](HYSTERIA2.md)。新脚本不会停止或修改旧 HY2；TCP 443 和 UDP 443 可以同时使用。
+
+## 系统要求
+
+不再限制 Ubuntu 版本号，22.04、24.04 等版本均可进入安装流程。需要 64 位 amd64/arm64、正在运行的 systemd、可用的 apt 软件源和公网 IPv4；安装后检查 Python ≥ 3.6、OpenSSL TLS 1.3 能力以及 sing-box 二进制能否运行。
+
+取消版本白名单不代表任意古老 Ubuntu 都能运行：过旧的运行库、内核或失效的软件源仍可能不兼容。优先使用仍受维护的 Ubuntu。未完成所有版本的真实 VPS 安装测试。
 
 ## 一条命令安装
 
@@ -12,7 +18,7 @@
 curl -fSL https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install-reality.sh -o /tmp/install-reality.sh && sudo bash /tmp/install-reality.sh 你的公网IPv4
 ```
 
-公开仓库，无需登录 GitHub。可先阅读下载的脚本再执行。系统须有 `python3` 和 `ss`（最小镜像先安装 `python3 iproute2`）；下载命令需要 `curl`。脚本安装其余依赖，从 SagerNet 官方 GitHub Release 下载固定版本二进制。需要能访问 Ubuntu 软件源、GitHub 和握手目标。
+公开仓库，无需登录 GitHub。可先阅读下载的脚本再执行。下载命令需要 `curl`（缺少时先执行 `sudo apt-get update && sudo apt-get install -y curl`）。脚本自动安装 Python 3、iproute2、OpenSSL 等依赖，从 SagerNet 官方 GitHub Release 下载固定版本二进制。需要能访问 Ubuntu 软件源、GitHub 和握手目标。
 
 可选参数：`公网IPv4 TCP端口 握手目标域名`，例如：
 
@@ -68,6 +74,7 @@ sudo systemctl disable --now hysteria-server
 
 ```bash
 bash -n install-reality.sh
+python3 tests/test-platform.py
 # 测试机需 PyYAML；不会安装服务或修改防火墙
 python3 tests/test-reality.py /path/to/sing-box
 ```
