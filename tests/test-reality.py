@@ -25,6 +25,9 @@ with tempfile.TemporaryDirectory() as tmp:
     server = json.loads((out / 'server.json').read_text())['inbounds'][0]
     client = json.loads((out / 'check-client.json').read_text())['outbounds'][0]
     clash = yaml.safe_load((out / 'clash-verge.yaml').read_text())
+    assert clash['log-level'] == 'warning'
+    if len(sys.argv) > 2:
+        subprocess.run([str(pathlib.Path(sys.argv[2]).resolve()), '-t', '-f', str(out / 'clash-verge.yaml'), '-d', tmp], check=True, stdout=subprocess.DEVNULL)
     node = clash['proxies'][0]
     uri = urlsplit((out / 'vless-uri.txt').read_text().strip())
     query = parse_qs(uri.query)
