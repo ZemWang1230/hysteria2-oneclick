@@ -4,6 +4,32 @@
 
 旧 Hysteria 2 的 `install.sh` 保留，文档见 [HYSTERIA2.md](HYSTERIA2.md)。新脚本不会停止或修改旧 HY2；TCP 443 和 UDP 443 可以同时使用。
 
+## 四协议安装（实验版）
+
+在全新 Ubuntu VPS 上运行一个 systemd 服务，生成 VLESS REALITY、Shadowsocks、Hysteria 2、TUIC 四个节点；不使用 Docker。需要公网 IPv4，amd64/arm64、systemd 和可用 apt。示例将 `你的公网IPv4` 替换为服务器地址：
+
+```bash
+curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install-multi.sh' -o /tmp/install-multi.sh && sudo bash /tmp/install-multi.sh 你的公网IPv4
+```
+
+默认占用 TCP 443（REALITY）、TCP 8388（SS）、UDP 8443（HY2）和 UDP 8444（TUIC）。请在云厂商防火墙放行；脚本会先检查端口，不停止已有服务。REALITY 端口可通过第二个参数调整，例如 `公网IPv4 24443`。不适用于直接覆盖已有安装；请在新服务器使用。系统 UFW 启用时会添加规则。
+
+输出 `clash-verge.yaml` 包含四个可选节点。`shadowrocket-nodes.txt` 包含四条节点链接，逐条导入；另将 `shadowrocket.conf` 保存并导入分流配置，首页选择要用的节点。输出包含密码、UUID，切勿公开分享或上传仓库。
+
+HY2 和 TUIC 使用本机生成的专用 CA 签发证书；Mac 配置固定服务端证书 SHA-256 指纹，不跳过验证。iPhone 需将 `root-ca.crt` 分隔线内的 PEM 内容保存为 `.crt`，通过可信、安全渠道传到 iPhone，安装描述文件后，在“设置 → 通用 → 关于本机 → 证书信任设置”中启用该证书的完全信任。安装根证书会扩大系统信任范围，只能信任自己这次安装生成的证书；不要信任陌生证书。CA 私钥仅在服务器临时文件中用于签发并在结束时清理，不会导出。
+
+证书及配置保存在 `/etc/sing-multi` 和 `/root/multi-client`，重启不会重新生成；可 `sudo bash /tmp/install-multi.sh --show` 重新打印输出。叶子证书有效 825 天，当前不支持自动续期，届时需重新部署并更新客户端配置和证书。请勿删除现有文件后直接重试，否则凭据可能改变。
+
+**验证限制：** 服务端配置、证书链、客户端 YAML 与导出格式已离线校验。此环境无法启动 sing-box 网络服务，未完成真实握手、Ubuntu systemd 安装或 Clash Verge / Shadowrocket 真机测试；特别是 Shadowrocket 的 TUIC/HY2 链接字段和系统 CA 信任仍需在真实版本上验证。脚本仅对 REALITY 进行本机代理自检，PASS 不代表四种协议均可用。你的网络此前出现 UDP 不通，HY2 和 TUIC 可能仍然失败。
+
+```bash
+sudo systemctl status sing-multi --no-pager -l
+sudo journalctl -u sing-multi -n 60 --no-pager
+python3 tests/test-multi.py /path/to/sing-box  # 测试环境需要 PyYAML 和 OpenSSL
+```
+
+## 原有 REALITY 单协议安装
+
 ## 系统要求
 
 不再限制 Ubuntu 版本号，22.04、24.04 等版本均可进入安装流程。需要 64 位 amd64/arm64、正在运行的 systemd、可用的 apt 软件源和公网 IPv4；安装后检查 Python ≥ 3.6、OpenSSL TLS 1.3 能力以及 sing-box 二进制能否运行。
