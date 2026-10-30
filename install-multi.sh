@@ -49,7 +49,7 @@ write('server.json', json.dumps(server, indent=2)+'\n')
 write('clash-verge.yaml', f'''mixed-port: 7890
 allow-lan: false
 mode: rule
-log-level: warn
+log-level: warning
 ipv6: false
 proxies:
   - name: REALITY
@@ -121,7 +121,7 @@ tls = {'enabled': True, 'certificate_path': str(p/'server.crt'), 'key_path': str
 conf['inbounds'].extend([
  {'type':'shadowsocks','tag':'ss-in','listen':'0.0.0.0','listen_port':8388,'network':'tcp','method':'chacha20-ietf-poly1305','password':sspw},
  {'type':'hysteria2','tag':'hy2-in','listen':'0.0.0.0','listen_port':8443,'users':[{'password':hypw}],'tls':dict(tls)},
- {'type':'tuic','tag':'tuic-in','listen':'0.0.0.0','listen_port':8444,'users':[{'uuid':uid,'password':tupw}],'congestion_control':'cubic','tls':dict(tls)},
+ {'type':'tuic','tag':'tuic-in','listen':'0.0.0.0','listen_port':8444,'users':[{'uuid':uid,'password':tupw}],'congestion_control':'cubic','tls':dict(tls, alpn=['h3'])},
 ])
 (p/'server.json').write_text(json.dumps(conf, indent=2)+'\n')
 fingerprint = subprocess.check_output(['openssl','x509','-in',str(p/'server.crt'),'-noout','-fingerprint','-sha256'],universal_newlines=True).strip().split('=',1)[1].replace(':','').lower()
@@ -147,6 +147,7 @@ extra = f'''  - name: SS
     uuid: {uid}
     password: "{tupw}"
     congestion-controller: cubic
+    alpn: [h3]
     sni: {ip}
     fingerprint: "{fingerprint}"
     skip-cert-verify: false
@@ -157,7 +158,7 @@ ss = base64.urlsafe_b64encode(('chacha20-ietf-poly1305:'+sspw).encode()).decode(
 uri = (p/'vless-uri.txt').read_text().strip()
 lines = [uri, 'ss://'+ss+'@'+ip+':8388#SS',
          'hysteria2://'+hypw+'@'+ip+':8443/?'+urlencode({'sni':ip,'insecure':'0'})+'#HY2',
-         'tuic://'+uid+':'+tupw+'@'+ip+':8444?'+urlencode({'congestion_control':'cubic','sni':ip,'allow_insecure':'0'})+'#TUIC']
+         'tuic://'+uid+':'+tupw+'@'+ip+':8444?'+urlencode({'congestion_control':'cubic','udp_relay_mode':'native','alpn':'h3','sni':ip,'allow_insecure':'0'})+'#TUIC']
 (p/'shadowrocket-nodes.txt').write_text('\n'.join(lines)+'\n')
 for f in p.iterdir(): f.chmod(0o600)
 PYAUG
@@ -203,6 +204,7 @@ PORT=$((10#${2:-443}))
 TARGET=${3:-www.microsoft.com}
 [[ -z $(ss -H -ltn "sport = :$PORT") ]] || fail "TCP $PORT 已被占用。可在 IP 后指定 24443。"
 [[ -z $(ss -H -ltn 'sport = :18080') ]] || fail '本地测试端口 TCP 18080 已被占用，请释放后再安装。'
+[[ $PORT != 18080 ]] || fail 'REALITY 端口不能与本地测试端口 TCP 18080 相同。'
 [[ $PORT != 8388 ]] || fail 'REALITY 端口不能与 Shadowsocks 的 TCP 8388 相同。'
 [[ -z $(ss -H -ltn 'sport = :8388') ]] || fail 'TCP 8388 已被占用。'
 for p in 8443 8444; do [[ -z $(ss -H -lun "sport = :$p") ]] || fail "UDP $p 已被占用。"; done
