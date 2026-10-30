@@ -1,6 +1,6 @@
 # Hysteria 2 一键部署
 
-面向 Ubuntu 24.04、64 位、公网 IPv4 的单用户部署。使用官方安装器 + systemd；自动生成密码和自签证书，终端打印 Clash Verge YAML、Shadowrocket CONF 和节点链接。
+面向 Ubuntu、64 位 amd64/arm64、公网 IPv4 的单用户部署。使用官方安装器 + systemd；自动生成密码和自签证书，终端打印 Clash Verge YAML、Shadowrocket CONF 和节点链接。
 
 ## 使用
 
@@ -12,7 +12,7 @@
 curl -fSL https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh -o /tmp/hy2-install.sh && sudo bash /tmp/hy2-install.sh 你的公网IPv4
 ```
 
-可在最后增加端口，例如 `你的公网IPv4 8443`。默认安装当时官方最新版本；首次运行需要访问 Ubuntu 软件源、官方安装站及安装器所需下载源。最小镜像若无 Python 3 / ss，先安装 `python3 iproute2`。运行前可以检查下载的脚本。无需向任何在线订阅转换网站发送密码。
+可在最后增加端口，例如 `你的公网IPv4 8443`。默认安装当时官方最新版本；首次运行需要访问 Ubuntu 软件源、官方安装站及安装器所需下载源。不限制 Ubuntu 版本号；需运行中的 systemd 和可用的 apt 软件源。自动安装 Python 3、iproute2 等依赖；要求 Python ≥ 3.6 和支持 `-addext` 的 OpenSSL。上游安装器及二进制仍有自身兼容要求，未承诺所有旧版本可用。下载命令需要预装 curl。运行前可以检查下载的脚本。无需向任何在线订阅转换网站发送密码。
 
 ## 导入
 
