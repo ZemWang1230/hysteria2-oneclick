@@ -1,0 +1,5 @@
+.env
+*.key
+*.crt
+hy2-client/
+__pycache__/
