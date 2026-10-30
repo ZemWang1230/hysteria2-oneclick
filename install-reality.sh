@@ -3,7 +3,7 @@ set -Eeuo pipefail
 fail() { echo "错误：$*" >&2; exit 1; }
 BASE=/etc/sing-reality
 CLIENTS=/root/reality-client
-VERSION=1.14.4
+SING_BOX_VERSION=1.14.4
 
 validate() {
   python3 - "$@" <<'PY'
@@ -156,9 +156,9 @@ client_pid=''
 cleanup() { if [[ -n $client_pid ]]; then kill "$client_pid" 2>/dev/null || true; wait "$client_pid" 2>/dev/null || true; fi; rm -rf "$work"; }
 trap cleanup EXIT
 curl -fSL --retry 3 --connect-timeout 15 --max-time 180 \
- "https://github.com/SagerNet/sing-box/releases/download/v$VERSION/sing-box-$VERSION-linux-$ARCH.tar.gz" -o "$work/sing-box.tar.gz"
+ "https://github.com/SagerNet/sing-box/releases/download/v$SING_BOX_VERSION/sing-box-$SING_BOX_VERSION-linux-$ARCH.tar.gz" -o "$work/sing-box.tar.gz"
 tar --no-same-owner -xzf "$work/sing-box.tar.gz" -C "$work"
-BINARY="$work/sing-box-$VERSION-linux-$ARCH/sing-box"
+BINARY="$work/sing-box-$SING_BOX_VERSION-linux-$ARCH/sing-box"
 "$BINARY" version || fail 'sing-box 二进制无法运行，请检查系统运行库与 CPU/内核兼容性。'
 openssl s_client -help 2>&1 | grep -q -- '-tls1_3' || fail '系统 OpenSSL 不支持 TLS 1.3，请升级 OpenSSL 或 Ubuntu。'
 # Verify the selected target is reachable with TLS 1.3 before writing deployment files.
