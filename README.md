@@ -7,7 +7,7 @@
 先在 VPS 厂商防火墙放行 **TCP 80**（用于签发和续期证书），替换 IP 后运行：
 
 ```bash
-curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh' -o /tmp/proxy-install.sh && sudo bash /tmp/proxy-install.sh 你的公网IPv4
+sudo apt-get update && sudo apt-get install -y curl ca-certificates && curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh' -o /tmp/proxy-install.sh && sudo bash /tmp/proxy-install.sh 你的公网IPv4
 ```
 
 安装随机选择五个 20000–29999 端口，打印端口及协议；REALITY、SS、VMess、HTTPS 为 TCP，HY2 为 UDP。UFW 已启用时自动放行；其他防火墙和厂商安全组需自行放行。请保持 TCP 80 公网可达，且不要被其他服务占用。重复安装不会覆盖既有配置。
