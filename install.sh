@@ -4,7 +4,7 @@ fail() { echo "错误：$*" >&2; exit 1; }
 ROOT=/etc/mihomo-five
 BIN=/usr/local/lib/mihomo-five
 CLIENTS=/root/mihomo-five-client
-VERSION=v1.19.33
+MIHOMO_VERSION=v1.19.33
 show() {
  for f in ports.json clash-verge.yaml shadowrocket-nodes.txt shadowrocket.conf; do
   printf '\n========== %s 开始 ==========\n' "$f"; cat "$CLIENTS/$f"; printf '========== %s 结束 ==========\n' "$f"
@@ -45,7 +45,7 @@ echo '证书签发及后续续期要求 VPS 厂商防火墙始终允许公网 TC
 umask 077
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-curl -fSL --retry 3 --connect-timeout 15 --max-time 180 "https://github.com/MetaCubeX/mihomo/releases/download/$VERSION/mihomo-linux-$ARCH-$VERSION.gz" -o "$work/mihomo.gz"
+curl -fSL --retry 3 --connect-timeout 15 --max-time 180 "https://github.com/MetaCubeX/mihomo/releases/download/$MIHOMO_VERSION/mihomo-linux-$ARCH-$MIHOMO_VERSION.gz" -o "$work/mihomo.gz"
 printf '%s  %s\n' "$DIGEST" "$work/mihomo.gz" | sha256sum -c -
 gzip -dc "$work/mihomo.gz" > "$work/mihomo"; chmod 0755 "$work/mihomo"
 curl -fSL --retry 3 --connect-timeout 15 --max-time 60 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/render.py?sha256=fe68ae654453cfcbf239ec81e8410b27d5dfe917135e95167cbf6ff87b40c5ae' -o "$work/render.py"
