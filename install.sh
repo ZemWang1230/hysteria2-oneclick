@@ -48,8 +48,8 @@ trap 'rm -rf "$work"' EXIT
 curl -fSL --retry 3 --connect-timeout 15 --max-time 180 "https://github.com/MetaCubeX/mihomo/releases/download/$VERSION/mihomo-linux-$ARCH-$VERSION.gz" -o "$work/mihomo.gz"
 printf '%s  %s\n' "$DIGEST" "$work/mihomo.gz" | sha256sum -c -
 gzip -dc "$work/mihomo.gz" > "$work/mihomo"; chmod 0755 "$work/mihomo"
-curl -fSL --retry 3 --connect-timeout 15 --max-time 60 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/render.py' -o "$work/render.py"
-printf '%s  %s\n' '1baf4ad23f04586caec407ebff68be26f0c7db30e78d1718628bbc7f31237b41' "$work/render.py" | sha256sum -c -
+curl -fSL --retry 3 --connect-timeout 15 --max-time 60 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/render.py?sha256=fe68ae654453cfcbf239ec81e8410b27d5dfe917135e95167cbf6ff87b40c5ae' -o "$work/render.py"
+printf '%s  %s\n' 'fe68ae654453cfcbf239ec81e8410b27d5dfe917135e95167cbf6ff87b40c5ae' "$work/render.py" | sha256sum -c -
 install -d -m 0755 "$BIN"
 python3 -m venv "$BIN/certbot"
 "$BIN/certbot/bin/pip" install 'certbot==5.4.0'
@@ -87,15 +87,23 @@ UMask=0077
 [Install]
 WantedBy=multi-user.target
 UNIT
-# deploy hook copies certificates to readable location and restarts Mihomo.
+# The marker records the certificate only after a successful restart. If restart
+# fails, the next timer run retries even if Certbot considers renewal complete.
 cat > "$BIN/deploy-cert" <<HOOK
 #!/usr/bin/env bash
 set -Eeuo pipefail
-install -m 0640 -o root -g '$GROUP' "\$RENEWED_LINEAGE/fullchain.pem" '$ROOT/fullchain.new'
-install -m 0640 -o root -g '$GROUP' "\$RENEWED_LINEAGE/privkey.pem" '$ROOT/privkey.new'
+umask 077
+lineage=\${RENEWED_LINEAGE:-/etc/letsencrypt/live/$IP}
+new_hash=\$(cat "\$lineage/fullchain.pem" "\$lineage/privkey.pem" | sha256sum | cut -d' ' -f1)
+old_hash=\$(cat '$ROOT/loaded-cert.sha256' 2>/dev/null || true)
+if [[ \$new_hash == \$old_hash ]]; then exit 0; fi
+install -m 0640 -o root -g '$GROUP' "\$lineage/fullchain.pem" '$ROOT/fullchain.new'
+install -m 0640 -o root -g '$GROUP' "\$lineage/privkey.pem" '$ROOT/privkey.new'
 mv -f '$ROOT/fullchain.new' '$ROOT/fullchain.pem'
 mv -f '$ROOT/privkey.new' '$ROOT/privkey.pem'
 systemctl restart mihomo-five.service
+printf '%s\\n' "\$new_hash" > '$ROOT/loaded-cert.sha256.new'
+mv -f '$ROOT/loaded-cert.sha256.new' '$ROOT/loaded-cert.sha256'
 HOOK
 chmod 0755 "$BIN/deploy-cert"
 cat > /etc/systemd/system/mihomo-five-renew.service <<UNIT
@@ -106,6 +114,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=$BIN/certbot/bin/certbot renew --cert-name $IP --deploy-hook $BIN/deploy-cert --non-interactive
+ExecStartPost=$BIN/deploy-cert
 UNIT
 cat > /etc/systemd/system/mihomo-five-renew.timer <<UNIT
 [Unit]
@@ -136,6 +145,9 @@ for name,port in json.load(open(sys.argv[1])).items():
  out=subprocess.check_output(['ss','-H',mode,'sport = :{}'.format(port)],text=True)
  if not out.strip(): sys.exit('监听失败: '+name+' '+str(port))
 PY
+# Mark the certificate loaded by the successfully started service, so the first
+# routine renewal check does not restart an unchanged service.
+cat "/etc/letsencrypt/live/$IP/fullchain.pem" "/etc/letsencrypt/live/$IP/privkey.pem" | sha256sum | cut -d' ' -f1 > "$ROOT/loaded-cert.sha256"
 if timeout 90 "$BIN/certbot/bin/certbot" renew --cert-name "$IP" --dry-run --non-interactive; then
  echo 'PASS：证书续期模拟通过；仍需持续监控定时器和实际续期。'
 else

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import base64, ipaddress, json, os, pathlib, secrets, socket, subprocess, sys, uuid
-from urllib.parse import quote, urlencode
+import base64, ipaddress, json, pathlib, secrets, socket, subprocess, sys, uuid
+from urllib.parse import urlencode
 
 def generate(ip, directory, binary, certificate, private_key, host='www.microsoft.com'):
     ipaddress.IPv4Address(ip)
@@ -32,7 +32,7 @@ def generate(ip, directory, binary, certificate, private_key, host='www.microsof
       {'name':'reality','type':'vless','listen':'0.0.0.0','port':vl,'users':[{'username':'owner','uuid':ru,'flow':'xtls-rprx-vision'}],'reality-config':{'dest':host+':443','private-key':priv,'short-id':[sid],'server-names':[host]}},
       {'name':'hysteria2','type':'hysteria2','listen':'0.0.0.0','port':hy,'users':{'owner':hp},'alpn':['h3'],**tls},
       {'name':'https','type':'http','listen':'0.0.0.0','port':ht,'users':[{'username':username,'password':pp}],**tls}]
-    server={'mode':'rule','log-level':'warning','listeners':listeners,'rules':['IP-CIDR,127.0.0.0/8,REJECT,no-resolve','IP-CIDR,10.0.0.0/8,REJECT,no-resolve','IP-CIDR,172.16.0.0/12,REJECT,no-resolve','IP-CIDR,192.168.0.0/16,REJECT,no-resolve','IP-CIDR,169.254.0.0/16,REJECT,no-resolve','MATCH,DIRECT']}
+    server={'mode':'rule','log-level':'warning','listeners':listeners,'rules':['IP-CIDR,127.0.0.0/8,REJECT','IP-CIDR,10.0.0.0/8,REJECT','IP-CIDR,172.16.0.0/12,REJECT','IP-CIDR,192.168.0.0/16,REJECT','IP-CIDR,169.254.0.0/16,REJECT','IP-CIDR6,::1/128,REJECT','IP-CIDR6,fc00::/7,REJECT','IP-CIDR6,fe80::/10,REJECT','MATCH,DIRECT']}
     proxies=[{'name':'SS','type':'ss','server':ip,'port':ss,'cipher':'chacha20-ietf-poly1305','password':sp,'udp':False},
       {'name':'VMess-WS-TLS','type':'vmess','server':ip,'port':vm,'uuid':vu,'alterId':0,'cipher':'auto','tls':True,'servername':ip,'network':'ws','ws-opts':{'path':path},'skip-cert-verify':False},
       {'name':'REALITY','type':'vless','server':ip,'port':vl,'uuid':ru,'network':'tcp','tls':True,'flow':'xtls-rprx-vision','servername':host,'client-fingerprint':'chrome','reality-opts':{'public-key':public,'short-id':sid}},

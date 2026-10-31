@@ -57,5 +57,24 @@ with tempfile.TemporaryDirectory() as tmp:
      assert r.returncode != 0, 'wrong credentials/certificate accepted: '+node['name']
      print('PASS rejection',node['name'])
     finally: c.terminate(); c.wait(timeout=5)
+
+  # Exercise production routing for literal and DNS-resolved local destinations.
+  proc.terminate(); proc.wait(timeout=5)
+  server['mode']='rule'
+  (out/'test-server.json').write_text(json.dumps(server))
+  proc=subprocess.Popen([binary,'-f',str(out/'test-server.json'),'-d',str(out)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  time.sleep(1.5)
+  node=client['proxies'][0]
+  with contextlib.closing(socket.socket()) as sock: sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]
+  conf={'mixed-port':port,'mode':'rule','log-level':'warning','proxies':[node],'rules':['MATCH,'+node['name']]}
+  home=p/'private-test'; home.mkdir(); f=home/'config.json'; f.write_text(json.dumps(conf))
+  c=subprocess.Popen([binary,'-f',str(f),'-d',str(home)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  try:
+   time.sleep(1)
+   for host in ('127.0.0.1','localhost'):
+    r=subprocess.run(['curl','-fsS','--max-time','5','--noproxy','','-x','http://127.0.0.1:'+str(port),'http://'+host+':'+str(http.server_port)+'/'],capture_output=True,text=True)
+    assert r.returncode != 0, 'private destination unexpectedly reachable: '+host
+   print('PASS private IPv4 literal and localhost rejection')
+  finally: c.terminate(); c.wait(timeout=5)
  finally:
   proc.terminate(); proc.wait(timeout=5); target.terminate(); target.wait(timeout=5); http.shutdown()

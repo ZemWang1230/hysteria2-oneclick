@@ -12,7 +12,7 @@ curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main
 
 安装随机选择五个 20000–29999 端口，打印端口及协议；REALITY、SS、VMess、HTTPS 为 TCP，HY2 为 UDP。UFW 已启用时自动放行；其他防火墙和厂商安全组需自行放行。请保持 TCP 80 公网可达，且不要被其他服务占用。重复安装不会覆盖既有配置。
 
-公网 IP 证书由 Let's Encrypt 签发，有效期约六天。systemd 定时器每六小时检查续期；续期后重启代理以加载证书。安装时运行续期模拟；如失败立即排查。未配置邮件告警，请定期检查定时器与日志。
+公网 IP 证书由 Let's Encrypt 签发，有效期约六天。systemd 定时器每六小时检查续期；续期后重启代理以加载证书；若重载失败，下一次定时检查会重试。安装时运行续期模拟；如失败立即排查。未配置邮件告警，请定期检查定时器与日志。
 
 ## 导入
 
@@ -36,4 +36,4 @@ sudo /usr/local/lib/mihomo-five/certbot/bin/certbot renew --dry-run
 
 ## 验证范围
 
-Mihomo 1.19.33 已通过五节点服务端和客户端配置检查、本地双端 HTTP 代理转发，以及错误密码/证书拒绝测试。真实公网 IP 证书签发与自动续期、systemd 低权限服务、Mac/iPhone 真机导入尚未实测，特别是 Shadowrocket 配置兼容性需在设备上验证。HY2 依赖 UDP，网络阻断 UDP 时无法使用。
+Mihomo 1.19.33 已通过五节点服务端和客户端配置检查、本地双端 HTTP 代理转发，错误密码/证书拒绝和部分本机私网目标阻断测试。续期重载重试使用模拟 systemd 测试。真实公网 IP 证书签发与自动续期、systemd 低权限服务、Mac/iPhone 真机导入尚未实测，特别是 Shadowrocket 配置兼容性需在设备上验证。HY2 依赖 UDP，网络阻断 UDP 时无法使用。
