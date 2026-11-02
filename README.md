@@ -1,39 +1,31 @@
-# Ubuntu 五协议一键部署
+# 五协议一键部署
 
-在 Ubuntu 64 位 VPS 上用一个 Mihomo 服务同时提供 SS、VMess + WS + TLS、VLESS REALITY、Hysteria 2、HTTPS 正向代理；无需 Docker 或域名。需要公网 IPv4、Python 3.10+、systemd 和可用软件源。
+在全新 Ubuntu x86_64 VPS 上一次安装 Shadowsocks-rust、V2Ray VMess + WS + TLS、Xray VLESS + REALITY + Vision、Hysteria 2 和 Caddy HTTPS 正向代理。不使用 Docker；每个服务分配不同的随机端口。支持只有 IPv4、只有 IPv6 或双栈，前提是所用公网地址确实可被客户端访问。
 
 ## 安装
 
-先在 VPS 厂商防火墙放行 **TCP 80**（用于签发和续期证书），替换 IP 后运行：
+在 VPS 上执行：
 
 ```bash
-sudo apt-get update && sudo apt-get install -y curl ca-certificates && curl -fSL 'https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh' -o /tmp/proxy-install.sh && sudo bash /tmp/proxy-install.sh 你的公网IPv4
+sudo apt-get update && sudo apt-get install -y curl && curl -fsSL https://raw.githubusercontent.com/ZemWang1230/hysteria2-oneclick/main/install.sh -o /tmp/install-five.sh && sudo bash /tmp/install-five.sh
 ```
 
-安装随机选择五个 20000–29999 端口，打印端口及协议；REALITY、SS、VMess、HTTPS 为 TCP，HY2 为 UDP。UFW 已启用时自动放行；其他防火墙和厂商安全组需自行放行。请保持 TCP 80 公网可达，且不要被其他服务占用。重复安装不会覆盖既有配置。
+默认自动检测公网 IP；也可手动指定，例如：`sudo bash /tmp/install-five.sh 你的IPv4 你的IPv6`，单栈则只写一个地址。仅使用属于该 VPS、可以被公网访问的 IP。
 
-公网 IP 证书由 Let's Encrypt 签发，有效期约六天。systemd 定时器每六小时检查续期；续期后重启代理以加载证书；若重载失败，下一次定时检查会重试。安装时运行续期模拟；如失败立即排查。未配置邮件告警，请定期检查定时器与日志。
+证书首次签发和后续续期需要公网 TCP 80 畅通且未被其他服务占用。安装结束会显示所有端口，请在 VPS 厂商的防火墙或安全组中放行相应 TCP/UDP 端口。UFW 已开启时脚本添加规则，不会自动开启 UFW；使用 IPv6 的话还需确保 UFW 的 IPv6 防火墙和厂商安全组允许相应流量。
 
 ## 导入
 
-- **Mac：** 保存输出的 `clash-verge.yaml` 并导入，在 PROXY 中切换节点；JSON 也是 YAML 的有效格式。
-- **iPhone：** 逐条导入 `shadowrocket-nodes.txt` 中四条链接；HTTPS 正向代理按同一段输出中的地址、端口、用户名、密码手动添加，启用 TLS 和证书验证。保存并导入 `shadowrocket.conf` 分流配置。
+安装结束会显示配置和订阅地址，稍后可用 `sudo bash /tmp/install-five.sh --show` 再次查看：
 
-使用公开可信 IP 证书，无需安装根 CA；证书续期不会更改客户端配置。节点内容含凭据，不要公开分享。默认局域网直连，其余代理；系统代理不一定覆盖所有应用或 DNS。
+- Clash Verge：导入 `clash-verge.yaml` 内容或 Clash 订阅 URL；包含所有协议的 IPv4/IPv6 节点。
+- Shadowrocket：添加 Shadowrocket 订阅 URL 导入 SS、VMess、REALITY、HY2 节点；`shadowrocket.conf` 是可选规则配置。HTTPS 正向代理需根据 `shadowrocket-https-manual.json` 手动添加，类型选 HTTPS，并开启证书验证。
 
-## 管理
+订阅 URL、节点和配置包含密码，请勿公开。订阅 URL 是不易猜测的私密链接，持有链接的人可读取节点。相关文件保存在 `/root/dual-proxy-client/`。
 
-```bash
-sudo bash /tmp/proxy-install.sh --show
-sudo systemctl status mihomo-five --no-pager -l
-sudo journalctl -u mihomo-five -n 60 --no-pager
-sudo systemctl status mihomo-five-renew.timer
-sudo journalctl -u mihomo-five-renew -n 60 --no-pager
-sudo /usr/local/lib/mihomo-five/certbot/bin/certbot renew --dry-run
-```
+## 注意
 
-安装中断后请先检查输出和日志，不要直接删除已有凭据；安装并非自动回滚。`--show` 会输出秘密，只在安全的终端使用。
-
-## 验证范围
-
-Mihomo 1.19.33 已通过五节点服务端和客户端配置检查、本地双端 HTTP 代理转发，错误密码/证书拒绝和部分本机私网目标阻断测试。续期重载重试使用模拟 systemd 测试。真实公网 IP 证书签发与自动续期、systemd 低权限服务、Mac/iPhone 真机导入尚未实测，特别是 Shadowrocket 配置兼容性需在设备上验证。HY2 依赖 UDP，网络阻断 UDP 时无法使用。
+- Hysteria 2 沿用参考项目的自签名证书方案，客户端关闭证书验证，存在中间人攻击风险。其余 TLS 和订阅使用 Let's Encrypt IP 证书，证书有效期约 6 天，systemd 定时续期。请确保 TCP 80 长期可访问。
+- 本项目使用参考项目的 Caddy forward_proxy 构建，目前只支持 x86_64。Xray 固定在与测试用 Mihomo 兼容的 26.6.27；应关注上游安全更新。Caddy 上游使用可变的 monthly 文件名，本项目验证固定 SHA-256，上游更新文件后会安全地停止安装，需更新校验值。
+- 网络实际速度取决于 VPS 线路及 TCP/UDP 通路；IP 证书签发需要 CA 能从公网访问每个指定地址。脚本不会覆盖已检测到的本项目安装或占用的 TCP 80。
+- 参照 [yeahwu/v2ray-wss](https://github.com/yeahwu/v2ray-wss)，见 LICENSE 和 NOTICE。

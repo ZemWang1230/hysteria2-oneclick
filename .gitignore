@@ -1,5 +1,2 @@
-.env
-*.key
-*.crt
-*.pem
 __pycache__/
+*.pyc

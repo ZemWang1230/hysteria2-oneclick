@@ -1,0 +1,1 @@
+Hysteria 2 configuration in hy2.py is adapted from yeahwu/v2ray-wss hy2.sh, https://github.com/yeahwu/v2ray-wss/blob/71fd6ebd7793f2b7acb958b19df836b5171aacaa/hy2.sh, Apache License 2.0. Modified to generate dual-stack client links and configuration without using the original installer.
