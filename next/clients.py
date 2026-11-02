@@ -27,14 +27,14 @@ def build(state):
         path=secret['ws_path']; host=secret['reality_sni']; u=secret['https_username']; pw=secret['https_password']
         proxies.extend([
             {'name':ss,'type':'ss','server':ip,'port':ports['ss'],'cipher':'aes-128-gcm','password':secret['ss_password'],'udp':True},
-            {'name':vm,'type':'vmess','server':ip,'port':ports['vmess'],'uuid':secret['vmess_uuid'],'alterId':0,'cipher':'auto','network':'ws','tls':True,'servername':ip,'skip-cert-verify':False,'ws-opts':{'path':path}},
+            {'name':vm,'type':'vmess','server':ip,'port':ports['vmess'],'uuid':secret['vmess_uuid'],'alterId':0,'cipher':'auto','network':'ws','tls':True,'servername':ip,'skip-cert-verify':False,'ws-opts':{'path':path,'headers':{'Host':('['+ip+']' if ':' in ip else ip)}}},
             {'name':re,'type':'vless','server':ip,'port':ports['reality'],'uuid':secret['reality_uuid'],'network':'tcp','tls':True,'flow':'xtls-rprx-vision','servername':host,'client-fingerprint':'chrome','reality-opts':{'public-key':secret['reality_public_key'],'short-id':secret['reality_short_id']}},
             hy2.client_node(ip,ports['hy2'],secret['hy2_password']),
             {'name':ht,'type':'http','server':ip,'port':ports['https'],'username':u,'password':pw,'tls':True,'sni':ip,'skip-cert-verify':False},
         ])
         names.extend([ss,vm,re,hy,ht])
         b64=lambda data:base64.urlsafe_b64encode(data.encode()).decode().rstrip('=')
-        vminfo={'v':'2','ps':vm,'add':ip,'port':str(ports['vmess']),'id':secret['vmess_uuid'],'aid':'0','scy':'auto','net':'ws','type':'none','host':ip,'path':path,'tls':'tls','sni':ip}
+        vminfo={'v':'2','ps':vm,'add':ip,'port':str(ports['vmess']),'id':secret['vmess_uuid'],'aid':'0','scy':'auto','net':'ws','type':'none','host':('['+ip+']' if ':' in ip else ip),'path':path,'tls':'tls','sni':ip}
         q=urlencode({'encryption':'none','security':'reality','type':'tcp','sni':host,'fp':'chrome','pbk':secret['reality_public_key'],'sid':secret['reality_short_id'],'flow':'xtls-rprx-vision'})
         links.extend(['ss://'+b64('aes-128-gcm:'+secret['ss_password'])+'@'+authority(ip,ports['ss'])+'#'+ss,
                       'vmess://'+base64.b64encode(json.dumps(vminfo,separators=(',',':')).encode()).decode(),
