@@ -1,0 +1,1 @@
+Work in progress: Hysteria 2 rendering and local IPv4/IPv6 test only. Not an installer, not ready for deployment. HY2 clients deliberately disable certificate verification as requested. Run: HYSTERIA_BIN=/path/to/hysteria python3 -m unittest discover -s next/tests -v
