@@ -17,11 +17,17 @@ def render(state, paths):
     bind=lambda n: ('listen 0.0.0.0:'+str(n)+' ssl;\n' if v4 else '')+('listen [::]:'+str(n)+' ssl ipv6only=on;\n' if v6 else '')
     token=cred['subscription_token']
     if not token.isalnum() or not cred['ws_path'].startswith('/') or not cred['ws_path'][1:].isalnum(): raise ValueError('unsafe token or path')
-    nginx='''pid %(prefix)s/nginx.pid;
+    nginx='''user www-data;
+pid %(pid)s;
 worker_processes 1;
 error_log stderr warn;
 events { worker_connections 1024; }
 http {
+ client_body_temp_path %(temp)s/client;
+ proxy_temp_path %(temp)s/proxy;
+ fastcgi_temp_path %(temp)s/fastcgi;
+ uwsgi_temp_path %(temp)s/uwsgi;
+ scgi_temp_path %(temp)s/scgi;
  access_log off;
  server {
   %(vm_bind)s
@@ -49,7 +55,7 @@ http {
   location / { return 404; }
  }
 }
-'''%{'prefix':paths['prefix'],'vm_bind':bind(port['vmess']),'sub_bind':bind(port['subscription']),'cert':cert,'key':key,'path':cred['ws_path'],'local':port['v2ray_local'],'token':token}
+'''%{'prefix':paths['prefix'],'temp':paths.get('nginx_temp',paths['prefix']+'/tmp'),'pid':paths.get('nginx_pid',paths['prefix']+'/nginx.pid'),'vm_bind':bind(port['vmess']),'sub_bind':bind(port['subscription']),'cert':cert,'key':key,'path':cred['ws_path'],'local':port['v2ray_local'],'token':token}
     # Reference project's Caddy build includes the forward_proxy module.
     caddy='''{
  admin off
