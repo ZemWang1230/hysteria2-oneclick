@@ -1,6 +1,6 @@
 # 五协议一键部署
 
-在全新 Ubuntu x86_64 VPS 上一次安装 Shadowsocks-rust、V2Ray VMess + WS + TLS、Xray VLESS + REALITY + Vision、Hysteria 2 和 Caddy HTTPS 正向代理。不使用 Docker；每个服务分配不同的随机端口。支持只有 IPv4、只有 IPv6 或双栈，前提是所用公网地址确实可被客户端访问。
+在全新 Ubuntu x86_64 VPS（Python 3.10 及以上，如 Ubuntu 22.04 / 24.04）上一次安装 Shadowsocks-rust、V2Ray VMess + WS + TLS、Xray VLESS + REALITY + Vision、Hysteria 2 和 Caddy HTTPS 正向代理。不使用 Docker；每个服务分配不同的随机端口。支持只有 IPv4、只有 IPv6 或双栈，前提是所用公网地址确实可被客户端访问。
 
 ## 安装
 

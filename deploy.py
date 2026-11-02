@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Install five services on a fresh Ubuntu host, without modifying unrelated servers."""
-import ipaddress, json, os, pathlib, shutil, subprocess, sys, tempfile, urllib.request
+import hashlib, ipaddress, json, os, pathlib, shutil, subprocess, sys, tempfile
 import clients, services, state
 
 BIN=pathlib.Path('/usr/local/lib/dual-proxy')
@@ -14,7 +14,7 @@ def run(*args, **kw):
     return subprocess.run(args,check=True,**kw)
 
 def fetch(url, digest, destination):
-    run('curl','-fL','--retry','3','-o',destination,url)
+    run('curl','-fL','--retry','3','--connect-timeout','20','--max-time','300','-o',destination,url)
     import hashlib
     h=hashlib.sha256(pathlib.Path(destination).read_bytes()).hexdigest()
     if h!=digest: raise RuntimeError('下载文件校验失败: '+url)
@@ -30,11 +30,33 @@ def detect():
             except ValueError:pass
     return addresses
 
+def ufw_active():
+    return bool(shutil.which('ufw') and 'Status: active' in subprocess.run(['ufw','status'],capture_output=True,text=True,env=dict(os.environ,LC_ALL='C')).stdout)
+
 def write(path, body, mode=0o600):
     path=pathlib.Path(path); path.write_text(body);path.chmod(mode)
 
 def unit(name,cmd,user='dualproxy',extra=''):
     return f'''[Unit]\nDescription=Dual proxy {name}\nAfter=network-online.target\nWants=network-online.target\n[Service]\nUser={user}\nExecStart={cmd}\n{extra}Restart=on-failure\nRestartSec=3\nNoNewPrivileges=true\nPrivateTmp=true\n[Install]\nWantedBy=multi-user.target\n'''
+
+def renewal_script(cert, etc, binary, nginx='/usr/sbin/nginx'):
+    return f'''#!/bin/sh
+set -eu
+stamp=$(sha256sum {cert}fullchain.pem | cut -d ' ' -f 1)
+marker={etc}/applied-cert.sha256
+if [ -f "$marker" ] && [ "$(cat "$marker")" = "$stamp" ] && \
+   cmp -s {cert}fullchain.pem {etc}/fullchain.pem && \
+   cmp -s {cert}privkey.pem {etc}/privkey.pem; then
+ exit 0
+fi
+install -o root -g dualproxy -m 640 {cert}fullchain.pem {etc}/fullchain.pem
+install -o root -g dualproxy -m 640 {cert}privkey.pem {etc}/privkey.pem
+{nginx} -t -c {etc}/nginx.conf
+{binary}/caddy validate --config {etc}/Caddyfile --adapter caddyfile
+systemctl reload dual-proxy-nginx
+systemctl restart dual-proxy-https
+printf '%s\n' "$stamp" > "$marker"
+'''
 
 def main():
     addresses=sys.argv[1:] or detect()
@@ -44,7 +66,7 @@ def main():
     addresses=[str(x) for x in parsed]
     print('准备使用公网地址:', ', '.join(addresses),flush=True)
     print('签发和续期需公网 TCP 80 可达；请同时在 VPS 厂商防火墙放行。',flush=True)
-    if shutil.which('ufw') and 'Status: active' in subprocess.run(['ufw','status'],capture_output=True,text=True).stdout:run('ufw','allow','80/tcp')
+    if ufw_active():run('ufw','allow','80/tcp')
     with tempfile.TemporaryDirectory() as tmp:
         tmp=pathlib.Path(tmp)
         downloads=[
@@ -108,17 +130,17 @@ def main():
     run(str(BIN/'v2ray'),'test','-config',str(ETC/'v2ray.json'))
     run(str(BIN/'xray'),'run','-test','-config',str(ETC/'xray.json'))
     run(str(BIN/'caddy'),'validate','--config',str(ETC/'Caddyfile'),'--adapter','caddyfile')
-    # Refresh files after successful renewal, and on subsequent runs if reloading failed.
-    renew=f'''#!/bin/sh\nset -eu\ninstall -o root -g dualproxy -m 640 {CERT}fullchain.pem {ETC}/fullchain.pem\ninstall -o root -g dualproxy -m 640 {CERT}privkey.pem {ETC}/privkey.pem\n/usr/sbin/nginx -t -c {ETC}/nginx.conf\n{BIN}/caddy validate --config {ETC}/Caddyfile --adapter caddyfile\nsystemctl reload dual-proxy-nginx\nsystemctl restart dual-proxy-https\n'''
-    write(BIN/'renew-deploy',renew,0o700)
+    # A marker is updated only after both services have applied the certificate.
+    write(BIN/'renew-deploy',renewal_script(CERT,ETC,BIN),0o700)
     write('/etc/systemd/system/dual-proxy-renew.service',f'[Unit]\nDescription=Renew IP certificate\n[Service]\nType=oneshot\nExecStart={certbot} renew --cert-name dual-proxy-ip --quiet\nExecStartPost={BIN}/renew-deploy\n',0o644)
     write('/etc/systemd/system/dual-proxy-renew.timer','[Unit]\nDescription=Check IP certificate every six hours\n[Timer]\nOnBootSec=10min\nOnUnitActiveSec=6h\nPersistent=true\n[Install]\nWantedBy=timers.target\n',0o644)
-    if shutil.which('ufw') and 'Status: active' in subprocess.run(['ufw','status'],capture_output=True,text=True).stdout:
+    if ufw_active():
         for name,proto in [('ss','tcp'),('ss','udp'),('vmess','tcp'),('reality','tcp'),('hy2','udp'),('https','tcp'),('subscription','tcp')]:run('ufw','allow',str(p[name])+'/'+proto)
     run('systemctl','daemon-reload')
     for name in definitions:run('systemctl','enable','--now','dual-proxy-'+name+'.service')
     run('systemctl','enable','--now','dual-proxy-renew.timer')
     for name in definitions:run('systemctl','is-active','--quiet','dual-proxy-'+name+'.service')
+    write(ETC/'applied-cert.sha256',hashlib.sha256(pathlib.Path(CERT+'fullchain.pem').read_bytes()).hexdigest()+'\n')
     print('\n安装完成。请在 VPS 厂商防火墙放行以下端口：\n'+ports,flush=True)
     for f in sorted(OUTPUT.iterdir()):print('\n========== '+f.name+' ==========\n'+f.read_text(),flush=True)
     print('订阅链接及节点含密码，请勿公开。HY2 使用自签名证书且关闭验证，有中间人风险。',flush=True)
