@@ -22,7 +22,7 @@ def fetch(url, digest, destination):
 def detect():
     addresses=[]
     for flag,url in [('-4','https://api.ipify.org'),('-6','https://api64.ipify.org')]:
-        r=subprocess.run(['curl','-fsS',flag,'--max-time','8',url],capture_output=True,text=True)
+        r=subprocess.run(['curl','-fsS','--noproxy','*',flag,'--max-time','8',url],capture_output=True,text=True)
         if r.returncode==0:
             try:
                 a=ipaddress.ip_address(r.stdout.strip())
@@ -31,7 +31,7 @@ def detect():
     return addresses
 
 def ufw_active():
-    return bool(shutil.which('ufw') and 'Status: active' in subprocess.run(['ufw','status'],capture_output=True,text=True,env=dict(os.environ,LC_ALL='C')).stdout)
+    return bool(shutil.which('ufw') and 'Status: active' in subprocess.run(['ufw','status'],capture_output=True,text=True,check=True,env=dict(os.environ,LC_ALL='C')).stdout)
 
 def write(path, body, mode=0o600):
     path=pathlib.Path(path); path.write_text(body);path.chmod(mode)
@@ -132,7 +132,7 @@ def main():
     run(str(BIN/'caddy'),'validate','--config',str(ETC/'Caddyfile'),'--adapter','caddyfile')
     # A marker is updated only after both services have applied the certificate.
     write(BIN/'renew-deploy',renewal_script(CERT,ETC,BIN),0o700)
-    write('/etc/systemd/system/dual-proxy-renew.service',f'[Unit]\nDescription=Renew IP certificate\n[Service]\nType=oneshot\nExecStart={certbot} renew --cert-name dual-proxy-ip --quiet\nExecStartPost={BIN}/renew-deploy\n',0o644)
+    write('/etc/systemd/system/dual-proxy-renew.service',f'[Unit]\nDescription=Renew IP certificate\n[Service]\nType=oneshot\nExecStart={certbot} renew --cert-name dual-proxy-ip --quiet --no-random-sleep-on-renew\nExecStartPost={BIN}/renew-deploy\n',0o644)
     write('/etc/systemd/system/dual-proxy-renew.timer','[Unit]\nDescription=Check IP certificate every six hours\n[Timer]\nOnBootSec=10min\nOnUnitActiveSec=6h\nPersistent=true\n[Install]\nWantedBy=timers.target\n',0o644)
     if ufw_active():
         for name,proto in [('ss','tcp'),('ss','udp'),('vmess','tcp'),('reality','tcp'),('hy2','udp'),('https','tcp'),('subscription','tcp')]:run('ufw','allow',str(p[name])+'/'+proto)

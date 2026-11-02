@@ -27,7 +27,7 @@ while read -r hash name; do
   curl --fail --location --retry 3 --connect-timeout 20 --max-time 300 "$base/$name?sha256=$hash" -o "$work/$name"
   printf '%s  %s\n' "$hash" "$work/$name" | sha256sum --check --status || { echo "下载校验失败: $name"; exit 1; }
 done <<'CHECKSUMS'
-557899afc5b934bb7b718ed0217490114adbee49727645282f8df91b8eaf53c1 deploy.py
+bde2a951a55b989809bf4fa018179b0f77ae1844fa29992e52319e0a76e6f02b deploy.py
 94982bf3016099a90e149cdec872641c4a91be6cc4ecf70902eecc929edb00cf state.py
 4daf7b10814ef87a9e4ab5a5eaf1a84a690d976d6046135cd6fe05b28c41350f services.py
 69ccf2489b6fc209ab6fb0f45e11e5ff6f6dd195e003126184f791e4d7011de8 clients.py

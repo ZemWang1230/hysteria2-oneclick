@@ -8,6 +8,17 @@ class InstallerTest(unittest.TestCase):
   for name in ('deploy.py','state.py','services.py','clients.py','hy2.py'):
    match=re.search(r'^([0-9a-f]{64}) '+re.escape(name)+r'$',script,re.M)
    self.assertIsNotNone(match);self.assertEqual(match.group(1),hashlib.sha256((ROOT/name).read_bytes()).hexdigest())
+ def test_ip_detection_bypasses_environment_proxy(self):
+  from unittest.mock import patch
+  import subprocess
+  with patch('deploy.subprocess.run',side_effect=[subprocess.CompletedProcess([],0,'8.8.8.8',''),subprocess.CompletedProcess([],1,'','')]) as run:
+   self.assertEqual(deploy.detect(),['8.8.8.8'])
+   self.assertIn('--noproxy',run.call_args_list[0].args[0])
+ def test_ufw_check_fails_closed(self):
+  from unittest.mock import patch
+  import subprocess
+  with patch('deploy.shutil.which',return_value='/usr/sbin/ufw'), patch('deploy.subprocess.run',side_effect=subprocess.CalledProcessError(1,'ufw')):
+   with self.assertRaises(subprocess.CalledProcessError):deploy.ufw_active()
  def test_service_user(self):
   unit=deploy.unit('test','/opt/test')
   self.assertIn('User=dualproxy\n',unit);self.assertIn('NoNewPrivileges=true',unit)
